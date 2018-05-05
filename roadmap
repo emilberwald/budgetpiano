@@ -1,0 +1,18 @@
+1.
+Film some footage to use as mocks ? 
+Use python to start with ?
+A. find the piano 
+  * geometric transform + template matching?
+   ** allow the user to fill the camera matrix ? automatic detection ? ...
+   - opencv ?
+B. detect keyboard presses
+  * require that the phone's camera is tilted ?
+  * notice when fingers strikes down
+   ** do some simple analysis of the kinematics?
+C. separate the UI from the business logic
+ * MVC / MVVM ? Use enum? json?
+D. play sounds depending on what key is struck
+ * perhaps use midi
+ * allow for echo etc ? can't see feet though ..
+2.
+Make into android program ? Unity?
