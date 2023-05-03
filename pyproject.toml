@@ -1,0 +1,21 @@
+[project]
+name = "budgetpiano"
+version = "0.0.0"
+description = "A 'piano'"
+readme = "README.md"
+requires-python = ">=3.8"
+
+dependencies = ["opencv-python", "python-rtmidi", "mido"]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-cov[all]", "black", "flake8", "mypy"]
+
+[tool.black]
+line-length = 120
+
+[tool.mypy]
+line_length = 120
+
+[tool.flake8]
+max-line-length = 120
+ignore = "E203,W503"
