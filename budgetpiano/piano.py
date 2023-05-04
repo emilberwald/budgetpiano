@@ -10,7 +10,14 @@ def _draw_keys(*, left, top, width, height, scale, image, fill_color, border_col
     cv2.rectangle(image, start, end, border_color, border_thickness)
 
 
-def get_piano(white_key_width_px: int = 10, nof_keys: int = 88, start_key_pitchclass: int = 9):
+def get_piano(
+    white_key_width_px: int = 10,
+    nof_keys: int = 88,
+    start_key_pitchclass: int = 9,
+    white_key_color=(255, 255, 255),
+    black_key_color=(0, 0, 0),
+    red_velvet_color=(0, 0, 77),
+):
     red_velvet_height = 0.2
     white_key_width = 2.25
     white_key_height = 14.6
@@ -55,7 +62,7 @@ def get_piano(white_key_width_px: int = 10, nof_keys: int = 88, start_key_pitchc
     image = numpy.zeros((math.ceil(scale * height), math.ceil(scale * width), 3), numpy.uint8)
     width_px = image.shape[1]
 
-    cv2.rectangle(image, (0, 0), (width_px, int(scale * red_velvet_height)), (0, 0, 255), cv2.FILLED)
+    cv2.rectangle(image, (0, 0), (width_px, int(scale * red_velvet_height)), red_velvet_color, cv2.FILLED)
     for white_key_start in white_key_starts:
         _draw_keys(
             left=white_key_start,
@@ -63,11 +70,13 @@ def get_piano(white_key_width_px: int = 10, nof_keys: int = 88, start_key_pitchc
             width=white_key_width,
             height=white_key_height,
             scale=scale,
-            fill_color=(255, 255, 255),
+            fill_color=white_key_color,
             image=image,
             border_color=(128, 128, 128),
             border_thickness=1,
         )
+        # TODO: the white keys are rounded at bottom
+
     for black_key_start in black_key_starts:
         _draw_keys(
             left=black_key_start,
@@ -75,7 +84,7 @@ def get_piano(white_key_width_px: int = 10, nof_keys: int = 88, start_key_pitchc
             width=black_key_width,
             height=black_key_height,
             scale=scale,
-            fill_color=(0, 0, 0),
+            fill_color=black_key_color,
             image=image,
             border_color=(128, 128, 128),
             border_thickness=1,
@@ -85,6 +94,6 @@ def get_piano(white_key_width_px: int = 10, nof_keys: int = 88, start_key_pitchc
 
 
 if __name__ == "__main__":
-    cv2.imshow("88-key piano", get_piano())
+    cv2.imshow("88-key piano", get_piano(50))
     cv2.waitKey(0)
     cv2.destroyAllWindows()
