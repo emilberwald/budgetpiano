@@ -2,6 +2,7 @@ import cv2
 import numpy
 import math
 import tkinter
+import tkinter.simpledialog
 import tkinter.colorchooser
 import PIL, PIL.Image, PIL.ImageTk
 
@@ -13,7 +14,7 @@ def _draw_keys(*, left, top, width, height, scale, image, fill_color, border_col
     cv2.rectangle(image, start, end, border_color, border_thickness)
 
 
-def get_piano(
+def _get_piano(
     white_key_width_px: int = 10,
     nof_keys: int = 88,
     start_key_pitchclass: int = 9,
@@ -108,18 +109,34 @@ def get_piano(
     return image
 
 
-class PianoPicker(tkinter.Tk):
-    def __init__(self, width: int, height: int):
-        super().__init__()
-        self.title("Piano App")
+class PianoPicker(tkinter.simpledialog.Dialog):
+    def __init__(self, *, width: int, height: int, parent=None):
+        self.width = width
+        self.height = height
+        self.image = None
+        if parent is None:
+            self.parent = tkinter.Tk()
+            self.parent.withdraw()
 
+        # Set up buttons to choose colors
+        self.bgr_colors = {
+            "white_key_color": (255, 255, 255),
+            "black_key_color": (0, 0, 0),
+            "red_velvet_color": (0, 0, 70),
+            "border_color": (128, 128, 128),
+            "background_color": (70, 70, 70),
+        }
+
+        super().__init__(parent=self.parent, title="Piano App")
+
+    def body(self, master):
         self.image_tk = None
         self.image_tk_id = None
 
         # Set up left part of the window to display the image
-        self.canvas_frame = tkinter.Frame(self, width=int(width * 0.8), height=height)
+        self.canvas_frame = tkinter.Frame(master, width=int(self.width * 0.8), height=self.height)
         self.canvas_frame.pack(side=tkinter.LEFT, fill=tkinter.BOTH, expand=True)
-        self.canvas = tkinter.Canvas(self.canvas_frame, width=int(width * 0.8), height=height)
+        self.canvas = tkinter.Canvas(self.canvas_frame, width=int(self.width * 0.8), height=self.height)
         hbar = tkinter.Scrollbar(self.canvas_frame, orient=tkinter.HORIZONTAL)
         hbar.pack(side=tkinter.BOTTOM, fill=tkinter.X)
         hbar.config(command=self.canvas.xview)
@@ -131,7 +148,7 @@ class PianoPicker(tkinter.Tk):
         self.canvas.pack(side=tkinter.LEFT, fill=tkinter.BOTH, expand=True)
 
         # Set up right part of the window with color pickers and sliders
-        self.settings_frame = tkinter.Frame(self, width=int(width * 0.2), height=height)
+        self.settings_frame = tkinter.Frame(master, width=int(self.width * 0.2), height=self.height)
         self.settings_frame.pack(side=tkinter.RIGHT)
 
         # White key width slider
@@ -142,9 +159,9 @@ class PianoPicker(tkinter.Tk):
             from_=1,
             to=100,
             resolution=1,
-            length=int(width * 0.2),
+            length=int(self.width * 0.2),
             orient="horizontal",
-            command=self.update_image,
+            command=self._update_image,
         )
         self.width_slider.pack()
         self.width_slider.set(10)
@@ -157,9 +174,9 @@ class PianoPicker(tkinter.Tk):
             from_=1,
             to=128,
             resolution=1,
-            length=int(width * 0.2),
+            length=int(self.width * 0.2),
             orient="horizontal",
-            command=self.update_image,
+            command=self._update_image,
         )
         self.nof_keys_slider.pack()
         self.nof_keys_slider.set(88)
@@ -172,44 +189,40 @@ class PianoPicker(tkinter.Tk):
             from_=0,
             to=11,
             resolution=1,
-            length=int(width * 0.2),
+            length=int(self.width * 0.2),
             orient="horizontal",
-            command=self.update_image,
+            command=self._update_image,
         )
         self.start_key_slider.pack()
         self.start_key_slider.set(9)
 
-        # Set up buttons to choose colors
-        self.bgr_colors = {
-            "white_key_color": (255, 255, 255),
-            "black_key_color": (0, 0, 0),
-            "red_velvet_color": (0, 0, 70),
-            "border_color": (128, 128, 128),
-            "background_color": (70, 70, 70),
-        }
         self.color_pickers = dict()
         for key, bgr in self.bgr_colors.items():
             self.color_pickers[key] = tkinter.Button(
                 self.settings_frame,
                 text=f"{key}",
-                command=self.choose_color(key, bgr),
-                bg=self.get_hexcolor(bgr[::-1]),
-                fg=self.get_hexcolor(self.get_contrast_color(bgr[::-1])),
+                command=self._choose_color(key, bgr),
+                bg=self._get_hexcolor(bgr[::-1]),
+                fg=self._get_hexcolor(self._get_contrast_color(bgr[::-1])),
             )
             self.color_pickers[key].pack(anchor="w")
 
-        self.update_image()
+        return master
 
-    def update_image(self, *args, **kwargs):
+    def apply(self):
+        self.result = self.image
+
+    def _update_image(self, *args, **kwargs):
+        self.image = _get_piano(
+            self.width_slider.get(),
+            self.nof_keys_slider.get(),
+            self.start_key_slider.get(),
+            **self.bgr_colors,
+        )
         self.image_tk = PIL.ImageTk.PhotoImage(
             PIL.Image.fromarray(
                 cv2.cvtColor(
-                    get_piano(
-                        self.width_slider.get(),
-                        self.nof_keys_slider.get(),
-                        self.start_key_slider.get(),
-                        **self.bgr_colors,
-                    ),
+                    self.image,
                     cv2.COLOR_BGR2RGB,
                 )
             )
@@ -225,26 +238,31 @@ class PianoPicker(tkinter.Tk):
             self.canvas.itemconfig(self.image_tk_id, image=self.image_tk)
             self.canvas.configure(scrollregion=self.canvas.bbox(tkinter.ALL))
 
-    def get_hexcolor(self, rgb):
+    def _get_hexcolor(self, rgb):
         return f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
 
-    def get_contrast_color(self, rgb):
+    def _get_contrast_color(self, rgb):
         luminance = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255
         if luminance > 0.5:
             return (0, 0, 0)
         else:
             return (255, 255, 255)
 
-    def choose_color(self, key, default_value):
-        def choose_color_implementation():
+    def _choose_color(self, key, default_value):
+        def _choose_color_implementation():
             rgb, hexcolor = tkinter.colorchooser.askcolor(title=f"Color Picker: {key}", initialcolor=default_value)
             if rgb is not None:
                 self.bgr_colors[key] = rgb[::-1]
-                self.color_pickers[key].configure(bg=hexcolor, fg=self.get_hexcolor(self.get_contrast_color(rgb)))
-                self.update_image()
+                self.color_pickers[key].configure(bg=hexcolor, fg=self._get_hexcolor(self._get_contrast_color(rgb)))
+                self._update_image()
 
-        return choose_color_implementation
+        return _choose_color_implementation
+
+
+def ask_for_piano_image():
+    return PianoPicker(width=800, height=600).result
 
 
 if __name__ == "__main__":
-    PianoPicker(800, 600).mainloop()
+    image = ask_for_piano_image()
+    pass

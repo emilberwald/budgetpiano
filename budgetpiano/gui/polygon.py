@@ -3,75 +3,9 @@ import pathlib
 
 import numpy
 import cv2
-import tkinter
-import tkinter.filedialog
-import mido
 
 
-def get_image():
-    root = tkinter.Tk()
-    try:
-        root.title("Select Image of Instrument")
-        file_path = tkinter.filedialog.askopenfilename(
-            filetypes=[
-                (
-                    "All Image Files",
-                    "*.bmp;*.dib;*.jpeg;*.jpg;*.jpe;*.jp2;*.png;*.webp;*.ppm;*.pxm;*.pbm;*.pgm;*.pnm;*.sr;*.ras;*.tiff;*.tif;*.exr;*.hdr;*.pic",
-                ),
-                ("Bitmap", "*.bmp;*.dib"),
-                ("Joint Photographic Experts Group", "*.jpeg;*.jpg;*.jpe"),
-                ("JPEG 2000", "*.jp2"),
-                ("Portable Network Graphics", "*.png"),
-                ("WebP", "*.webp"),
-                ("Portable Pixmap", "*.ppm"),
-                ("Portable Bitmap", "*.pbm"),
-                ("Portable Greymap", "*.pgm"),
-                ("Portable Anymap", "*.pnm; *.pxm"),
-                ("Sun Raster", "*.sr;*.ras"),
-                ("TIFF", "*.tiff;*.tif"),
-                ("OpenEXR", "*.exr"),
-                ("Radiance HDR", "*.hdr;*.pic"),
-            ]
-        )
-        return pathlib.Path(file_path)
-    finally:
-        root.destroy()
-
-
-def get_midi_port():
-    root = tkinter.Tk()
-    root.title("Select MIDI Output Port")
-    selected_port = tkinter.StringVar()
-
-    def set_port(event=None):
-        selected_port.set(listbox.get(tkinter.ACTIVE))
-        root.destroy()
-
-    frame = tkinter.Frame(root)
-    frame.pack(padx=10, pady=10)
-
-    label = tkinter.Label(frame, text="Select MIDI output port:")
-    label.pack()
-
-    listbox = tkinter.Listbox(frame, width=50)
-    listbox.pack(pady=10)
-
-    for name in mido.get_output_names():
-        listbox.insert(tkinter.END, name)
-
-    button_ok = tkinter.Button(frame, text="OK", command=set_port)
-    button_ok.pack(pady=10)
-
-    root.bind("<Return>", set_port)
-    root.bind("<Escape>", lambda event: root.destroy())
-
-    # Use mainloop to run the GUI and wait for the user to select a port
-    root.mainloop()
-
-    return selected_port.get()
-
-
-def get_polygon(image: numpy.ndarray, window_title="Select a Polygon"):
+def ask_for_polygon(image: numpy.ndarray, window_title="Select a Polygon"):
     def _mouse_callback(event, x, y, flags, params):
         params["point"] = (x, y)
 
@@ -120,6 +54,6 @@ def get_polygon(image: numpy.ndarray, window_title="Select a Polygon"):
             cv2.imshow(window_name, image_with_overlay)
             cv2.waitKey(1)
             if params["is_finished"]:
-                return [p for p in params["points"]]
+                return numpy.asarray([p for p in params["points"]])
     finally:
         cv2.destroyAllWindows()
