@@ -225,7 +225,8 @@ class PianoPicker(tkinter.simpledialog.Dialog):
                     self.image,
                     cv2.COLOR_BGR2RGB,
                 )
-            )
+            ),
+            master=self.parent,
         )
         if self.image_tk_id is None:
             self.image_tk_id = self.canvas.create_image(

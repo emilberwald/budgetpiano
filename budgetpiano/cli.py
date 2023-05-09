@@ -1,5 +1,6 @@
 import argparse
 import contextlib
+import itertools
 
 import budgetpiano.gui
 import budgetpiano.matcher
@@ -7,6 +8,7 @@ import budgetpiano.matcher
 import cv2
 import mido
 import numpy
+import scipy, scipy.optimize
 
 import contextlib
 
@@ -44,8 +46,7 @@ def find_homography(img, template, img_pts):
     template_pts = get_corners(template)
     smallest = None
     homography = None
-    for i in range(len(template_pts)):
-        template_corners = numpy.roll(template_pts, i, axis=0)
+    for template_corners in list(itertools.permutations(template_pts)):
         H, _ = cv2.findHomography(img_pts, numpy.asarray(template_corners))
         warped_img = cv2.warpPerspective(img, H, (template.shape[1], template.shape[0]))
         l2_distance = cv2.norm(warped_img, template)
@@ -57,46 +58,82 @@ def find_homography(img, template, img_pts):
     return homography
 
 
+def find_homography_manual(img, template, img_pts):
+    template_pts = get_corners(template)
+    homography = None
+    for template_corners in list(itertools.permutations(template_pts)):
+        H, _ = cv2.findHomography(img_pts, numpy.asarray(template_corners))
+        warped_img = cv2.warpPerspective(img, H, (template.shape[1], template.shape[0]))
+        if budgetpiano.gui.ask_image_question(warped_img):
+            return homography
+    raise ValueError("No template match good enough")
+
+
+def cost_function(params, *args):
+    homography = params.reshape((3, 3))
+    source = args[0]
+    cost = 0.0
+    for template in args[1:]:
+        destination = cv2.warpPerspective(source, homography, (template.shape[1], template.shape[0]))
+        cost += numpy.linalg.norm(destination.astype(float) - template.astype(float))
+    return cost
+
+
 def main(video_source, midi_port):
+    instrument_template = None
+    while instrument_template is None:
+        instrument_template = budgetpiano.gui.ask_for_piano_image()
+    instrument_templates = [instrument_template]
     instrument_homography = None
 
     with video_capture(video_source) as cap:
-        matcher = budgetpiano.matcher.GrayscaleMatcher()
+        target_fps = 2.0
+        video_fps = cap.get(cv2.CAP_PROP_FPS)
+        frame_skip = round(video_fps / target_fps)
 
-        nof_history_frames = int(cap.get(cv2.CAP_PROP_FPS) * 0.1)
+        nof_history_frames = int(cap.get(cv2.CAP_PROP_FPS) * 10.0)
         with managed_resource(
             cv2.createBackgroundSubtractorMOG2(history=nof_history_frames, detectShadows=False)
         ) as bg_model:
             while cap.isOpened():
+                if cap.grab():
+                    frame_no = cap.get(cv2.CAP_PROP_POS_FRAMES)
+                    if frame_no % frame_skip != 0:
+                        continue
+                else:
+                    break
                 ret, frame = cap.read()
                 if not ret:
                     break
 
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                stabilized_homography = matcher.get_homography(gray)
-                if stabilized_homography is not None:
-                    stabilized_frame = cv2.warpPerspective(
-                        frame, stabilized_homography, (frame.shape[1], frame.shape[0])
+                if instrument_homography is None:
+                    manual_polygon = budgetpiano.gui.ask_for_polygon(frame, "Select Piano polygon.")
+                    manual_homography = find_homography(frame, instrument_template, manual_polygon)
+                    manual_instrument = cv2.warpPerspective(
+                        frame, manual_homography, (instrument_template.shape[1], instrument_template.shape[0])
                     )
-                    if instrument_homography is None:
-                        polygon = budgetpiano.gui.ask_for_polygon(frame, "Select Piano polygon.")
-                        piano = budgetpiano.gui.ask_for_piano_image()
-                        instrument_homography = find_homography(stabilized_frame, piano, polygon)
+                    instrument_templates.append(manual_instrument)
+                    instrument_homography = manual_homography
 
-                    instrument_image = cv2.warpPerspective(
-                        stabilized_frame, instrument_homography, (piano.shape[1], piano.shape[0])
-                    )
-                    #detect fingers
+                result = scipy.optimize.minimize(
+                    cost_function, instrument_homography.ravel(), args=(frame, *instrument_templates)
+                )
+                instrument_homography = result.x.reshape((3, 3))
+                instrument_image = cv2.warpPerspective(
+                    frame, instrument_homography, (instrument_template.shape[1], instrument_template.shape[0])
+                )
 
-                    instrument_gray = cv2.cvtColor(instrument_image, cv2.COLOR_BGR2GRAY)
-                    foreground = bg_model.apply(instrument_gray)
-                    pass
+                # detect fingers
 
-                    # if finger points at key of piano, send midi event
-                    if midi_port:
-                        with open_midi_port(midi_port) as port:
-                            port.send(mido.Message("note_on", note=60, velocity=64))
-                            port.send(mido.Message("note_off", note=60))
+                foreground = bg_model.apply(instrument_image)
+                background = bg_model.getBackgroundImage()
+                pass
+
+                # if finger points at key of piano, send midi event
+                if midi_port:
+                    with open_midi_port(midi_port) as port:
+                        port.send(mido.Message("note_on", note=60, velocity=64))
+                        port.send(mido.Message("note_off", note=60))
 
 
 if __name__ == "__main__":
