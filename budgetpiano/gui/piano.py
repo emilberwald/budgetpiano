@@ -1,7 +1,7 @@
 import cv2
 import numpy
 import math
-import tkinter
+import tkinter.ttk as tkinter
 import tkinter.simpledialog
 import tkinter.colorchooser
 import PIL, PIL.Image, PIL.ImageTk
@@ -138,22 +138,21 @@ class PianoPicker(tkinter.simpledialog.Dialog):
         self.canvas_frame.pack(side=tkinter.LEFT, fill=tkinter.BOTH, expand=True)
         self.canvas = tkinter.Canvas(self.canvas_frame, width=int(self.width * 0.8), height=self.height)
         hbar = tkinter.Scrollbar(self.canvas_frame, orient=tkinter.HORIZONTAL)
-        hbar.pack(side=tkinter.BOTTOM, fill=tkinter.X)
         hbar.config(command=self.canvas.xview)
         vbar = tkinter.Scrollbar(self.canvas_frame, orient=tkinter.VERTICAL)
-        vbar.pack(side=tkinter.RIGHT, fill=tkinter.Y)
         vbar.config(command=self.canvas.yview)
         self.canvas.configure(xscrollcommand=hbar.set, yscrollcommand=vbar.set)
         self.canvas.configure(scrollregion=self.canvas.bbox(tkinter.ALL))
+
+        hbar.pack(side=tkinter.BOTTOM, fill=tkinter.X)
+        vbar.pack(side=tkinter.RIGHT, fill=tkinter.Y)
         self.canvas.pack(side=tkinter.LEFT, fill=tkinter.BOTH, expand=True)
 
         # Set up right part of the window with color pickers and sliders
         self.settings_frame = tkinter.Frame(master, width=int(self.width * 0.2), height=self.height)
-        self.settings_frame.pack(side=tkinter.RIGHT)
 
         # White key width slider
         self.width_label = tkinter.Label(self.settings_frame, text="White Key Width (px):")
-        self.width_label.pack()
         self.width_slider = tkinter.Scale(
             self.settings_frame,
             from_=1,
@@ -163,12 +162,10 @@ class PianoPicker(tkinter.simpledialog.Dialog):
             orient="horizontal",
             command=self._update_image,
         )
-        self.width_slider.pack()
         self.width_slider.set(10)
 
         # Number of keys slider
         self.nof_keys_label = tkinter.Label(self.settings_frame, text="Number of Keys:")
-        self.nof_keys_label.pack()
         self.nof_keys_slider = tkinter.Scale(
             self.settings_frame,
             from_=1,
@@ -178,13 +175,11 @@ class PianoPicker(tkinter.simpledialog.Dialog):
             orient="horizontal",
             command=self._update_image,
         )
-        self.nof_keys_slider.pack()
         self.nof_keys_slider.set(88)
 
         # Start key pitchclass slider
-        self.start_key_label = tkinter.Label(self.settings_frame, text="Start Key Pitchclass:")
-        self.start_key_label.pack()
-        self.start_key_slider = tkinter.Scale(
+        self.start_key_pitchclass_label = tkinter.Label(self.settings_frame, text="Start Key Pitchclass:")
+        self.start_key_pitchclass_slider = tkinter.Scale(
             self.settings_frame,
             from_=0,
             to=11,
@@ -193,8 +188,7 @@ class PianoPicker(tkinter.simpledialog.Dialog):
             orient="horizontal",
             command=self._update_image,
         )
-        self.start_key_slider.pack()
-        self.start_key_slider.set(9)
+        self.start_key_pitchclass_slider.set(9)
 
         self.color_pickers = dict()
         for key, bgr in self.bgr_colors.items():
@@ -205,9 +199,31 @@ class PianoPicker(tkinter.simpledialog.Dialog):
                 bg=self._get_hexcolor(bgr[::-1]),
                 fg=self._get_hexcolor(self._get_contrast_color(bgr[::-1])),
             )
-            self.color_pickers[key].pack(anchor="w")
+
+        self.button_49keys = tkinter.Button(self.settings_frame, text="49 - C", command=lambda: self.set_piano(49, 0))
+        self.button_61keys = tkinter.Button(self.settings_frame, text="61 - C", command=lambda: self.set_piano(61, 0))
+        self.button_76keys = tkinter.Button(self.settings_frame, text="76 - E", command=lambda: self.set_piano(76, 4))
+        self.button_88keys = tkinter.Button(self.settings_frame, text="88 - A", command=lambda: self.set_piano(88, 9))
+
+        self.settings_frame.pack(side=tkinter.RIGHT)
+        self.width_label.pack()
+        self.width_slider.pack()
+        self.nof_keys_label.pack()
+        self.nof_keys_slider.pack()
+        self.start_key_pitchclass_label.pack()
+        self.start_key_pitchclass_slider.pack()
+        for value in self.color_pickers.values():
+            value.pack()
+        self.button_49keys.pack()
+        self.button_61keys.pack()
+        self.button_76keys.pack()
+        self.button_88keys.pack()
 
         return master
+
+    def set_piano(self, nof_keys, start_key_pitchclass):
+        self.nof_keys_slider.set(nof_keys)
+        self.start_key_pitchclass_slider.set(start_key_pitchclass)
 
     def apply(self):
         self.result = self.image
@@ -216,7 +232,7 @@ class PianoPicker(tkinter.simpledialog.Dialog):
         self.image = _get_piano(
             self.width_slider.get(),
             self.nof_keys_slider.get(),
-            self.start_key_slider.get(),
+            self.start_key_pitchclass_slider.get(),
             **self.bgr_colors,
         )
         self.image_tk = PIL.ImageTk.PhotoImage(

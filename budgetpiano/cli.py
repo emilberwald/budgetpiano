@@ -42,14 +42,14 @@ def get_corners(image):
     return corners
 
 
-def find_homography(img, template, img_pts):
+def find_homography(img, template, image_points):
     template_pts = get_corners(template)
     smallest = None
     homography = None
     for template_corners in list(itertools.permutations(template_pts)):
-        H, _ = cv2.findHomography(img_pts, numpy.asarray(template_corners))
+        H, _ = cv2.findHomography(image_points, numpy.asarray(template_corners))
         warped_img = cv2.warpPerspective(img, H, (template.shape[1], template.shape[0]))
-        l2_distance = cv2.norm(warped_img, template)
+        l2_distance = cv2.norm(warped_img, template, cv2.RANSAC, 1.0)
         if (smallest is None) or (l2_distance < smallest):
             smallest = l2_distance
             homography = H
@@ -75,7 +75,15 @@ def cost_function(params, *args):
     cost = 0.0
     for template in args[1:]:
         destination = cv2.warpPerspective(source, homography, (template.shape[1], template.shape[0]))
-        cost += numpy.linalg.norm(destination.astype(float) - template.astype(float))
+        if numpy.allclose(destination, 0) or numpy.allclose(template, 0):
+            cost += 2.0
+        else:
+            cosine_similarity = numpy.dot(
+                destination.astype(float).ravel() / numpy.linalg.norm(destination.astype(float)),
+                template.astype(float).ravel() / numpy.linalg.norm(template.astype(float)),
+            )
+            dissimilarity_measure = (2.0 - (1.0 + cosine_similarity)) / 2.0
+            cost += dissimilarity_measure
     return cost
 
 
@@ -85,6 +93,7 @@ def main(video_source, midi_port):
         instrument_template = budgetpiano.gui.ask_for_piano_image()
     instrument_templates = [instrument_template]
     instrument_homography = None
+    video_stabilizer = None
 
     with video_capture(video_source) as cap:
         target_fps = 2.0
@@ -106,18 +115,31 @@ def main(video_source, midi_port):
                 if not ret:
                     break
 
+                if video_stabilizer is None:
+                    video_stabilizer = budgetpiano.matcher.VideoStabilizer()
+
+                stabilization_homography = video_stabilizer.get_homography(frame)
+                if stabilization_homography is not None:
+                    unstable_frame = frame
+                    frame = cv2.warpPerspective(
+                        unstable_frame, stabilization_homography, (frame.shape[1], frame.shape[0])
+                    )
+
                 if instrument_homography is None:
                     manual_polygon = budgetpiano.gui.ask_for_polygon(frame, "Select Piano polygon.")
                     manual_homography = find_homography(frame, instrument_template, manual_polygon)
                     manual_instrument = cv2.warpPerspective(
                         frame, manual_homography, (instrument_template.shape[1], instrument_template.shape[0])
                     )
-                    instrument_templates.append(manual_instrument)
+                    # instrument_templates.append(manual_instrument)
                     instrument_homography = manual_homography
 
+                max_scale_factor = max(frame.shape[:-1]) / min(instrument_template.shape[:-1])
+                bounds = [(-max_scale_factor, max_scale_factor)] * 8 + [(1, 1)]
                 result = scipy.optimize.minimize(
-                    cost_function, instrument_homography.ravel(), args=(frame, *instrument_templates)
+                    cost_function, x0=instrument_homography.ravel(), bounds=bounds, args=(frame, *instrument_templates)
                 )
+
                 instrument_homography = result.x.reshape((3, 3))
                 instrument_image = cv2.warpPerspective(
                     frame, instrument_homography, (instrument_template.shape[1], instrument_template.shape[0])
